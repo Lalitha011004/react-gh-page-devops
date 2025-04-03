@@ -1,45 +1,38 @@
-pipeline {
-    agent any
+#!/bin/bash
+set -e  # Exit on error
 
-    environment {
-        DOCKER_IMAGE = "your-dockerhub-username/react-app"
-        CONTAINER_NAME = "react-app"
-    }
+echo "🔹 Running Deploy Script"
 
-    stages {
-        stage('Checkout Code') {
-            steps {
-                git branch: 'main', url: 'https://github.com/YOUR-USERNAME/YOUR-REPO.git'
-            }
-        }
+# Ensure build.sh is executable
+chmod +x build.sh
 
-        stage('Build React App') {
-            steps {
-                sh 'npm install'
-                sh 'npm run build'
-            }
-        }
+# Run the build script
+./build.sh
 
-        stage('Build Docker Image') {
-            steps {
-                sh "docker build -t $DOCKER_IMAGE:latest ."
-            }
-        }
+# Stop and remove the existing container if it exists
+if [ "$(docker ps -aq -f name=task2_container)" ]; then
+    echo "🛑 Stopping and removing existing container 'task2_container'..."
+    docker stop task2_container || true
+    docker rm -f task2_container || true
+else
+    echo "✅ No existing container 'task2_container' found."
+fi
 
-        stage('Push to Docker Hub') {
-            steps {
-                withDockerRegistry([credentialsId: 'docker-hub-credentials', url: '']) {
-                    sh "docker push $DOCKER_IMAGE:latest"
-                }
-            }
-        }
+# Debugging: Ensure credentials are available
+echo "DOCKER_USERNAME: $DOCKER_USERNAME"
+if [ -z "$DOCKER_PASSWORD" ]; then
+    echo "❌ ERROR: DOCKER_PASSWORD is empty!"
+    exit 1
+fi
 
-        stage('Deploy Container') {
-            steps {
-                sh "docker stop $CONTAINER_NAME || true"
-                sh "docker rm $CONTAINER_NAME || true"
-                sh "docker run -d -p 80:80 --name $CONTAINER_NAME $DOCKER_IMAGE:latest"
-            }
-        }
-    }
-}
+# Log in securely using Docker credentials
+echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+# Tag and push the image
+docker tag lalithambigai011004/task2 lalithambigai011004/day2task2
+docker push lalithambigai011004/day2task2
+
+# Run the container with the new image
+docker run -d -p 8085:80 --name task2_container lalithambigai011004/task2
+
+echo "✅ Docker image pushed and container started successfully!"
